@@ -10,6 +10,7 @@ function App() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedWorkout, setSelectedWorkout] = useState(null);
   const [newExercise, setNewExercise] = useState({ name: '', weight: '', sets: '', reps: '' });
+  const [selectedType, setSelectedType] = useState("ягодицы+плечи"); // Новое состояние для типа
 
   // Загрузка тренировок из Firestore
   useEffect(() => {
@@ -38,6 +39,7 @@ function App() {
     setSelectedDate(date);
     const workout = workouts.find(w => w.date === date.toISOString().split('T')[0]);
     setSelectedWorkout(workout || null);
+    if (workout) setSelectedType(workout.type); // Устанавливаем текущий тип для существующей тренировки
   };
 
   // Добавление нового упражнения
@@ -54,12 +56,12 @@ function App() {
       // Создаём новую тренировку, если её нет
       const docRef = await addDoc(collection(db, "workouts"), {
         date: selectedDate.toISOString().split('T')[0],
-        type: "ягодицы+плечи", // По умолчанию, можно добавить выбор типа позже
+        type: selectedType, // Используем выбранный тип
         exercises: [exerciseData],
         timestamp: new Date()
       });
-      setWorkouts([...workouts, { id: docRef.id, date: selectedDate.toISOString().split('T')[0], type: "ягодицы+плечи", exercises: [exerciseData], timestamp: new Date() }]);
-      setSelectedWorkout({ id: docRef.id, date: selectedDate.toISOString().split('T')[0], type: "ягодицы+плечи", exercises: [exerciseData], timestamp: new Date() });
+      setWorkouts([...workouts, { id: docRef.id, date: selectedDate.toISOString().split('T')[0], type: selectedType, exercises: [exerciseData], timestamp: new Date() }]);
+      setSelectedWorkout({ id: docRef.id, date: selectedDate.toISOString().split('T')[0], type: selectedType, exercises: [exerciseData], timestamp: new Date() });
     } else {
       // Обновляем существующую тренировку
       const updatedExercises = [...selectedWorkout.exercises, exerciseData];
@@ -102,6 +104,22 @@ function App() {
         <Form onSubmit={addExercise}>
           <Row>
             <Col md={3}>
+              <Form.Group controlId="formType">
+                <Form.Label>Тип тренировки</Form.Label>
+                <Form.Select
+                  value={selectedType}
+                  onChange={(e) => setSelectedType(e.target.value)}
+                  required
+                >
+                  {Object.keys(workoutTypes).map((type) => (
+                    <option key={type} value={type}>
+                      {type} {workoutTypes[type].icon}
+                    </option>
+                  ))}
+                </Form.Select>
+              </Form.Group>
+            </Col>
+            <Col md={2}>
               <Form.Group controlId="formName">
                 <Form.Label>Название</Form.Label>
                 <Form.Control
@@ -145,9 +163,9 @@ function App() {
                 />
               </Form.Group>
             </Col>
-            <Col md={3} className="d-flex align-items-end">
+            <Col md={1} className="d-flex align-items-end">
               <Button variant="primary" type="submit">
-                Добавить упражнение
+                Добавить
               </Button>
             </Col>
           </Row>
