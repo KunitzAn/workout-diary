@@ -66,3 +66,14 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+.react-calendar {
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+  border: none;
+  font-family: Arial, sans-serif;
+}
+.react-calendar__tile--hasActive {
+  background: #e0e0e0;
+}
