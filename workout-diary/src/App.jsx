@@ -3,46 +3,71 @@ import Calendar from 'react-calendar';
 import { useState, useEffect } from 'react';
 import { db } from './firebase';
 import { collection, getDocs, addDoc, updateDoc, doc } from 'firebase/firestore';
-import { workoutTypes } from './constants';
+import { workoutTypes } from './constants.jsx';
 
 function App() {
   const [workouts, setWorkouts] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedWorkout, setSelectedWorkout] = useState(null);
   const [newExercise, setNewExercise] = useState({ name: '', weight: '', sets: '', reps: '' });
-  const [selectedType, setSelectedType] = useState("ягодицы+плечи"); // Новое состояние для типа
+  const [selectedType, setSelectedType] = useState("ягодицы+плечи");
+  const [loading, setLoading] = useState(true);
 
-  // Загрузка тренировок из Firestore
   useEffect(() => {
     const fetchWorkouts = async () => {
-      const querySnapshot = await getDocs(collection(db, "workouts"));
-      const workoutsData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setWorkouts(workoutsData);
+      setLoading(true);
+      try {
+        const querySnapshot = await getDocs(collection(db, "workouts"));
+        const workoutsData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          date: doc.data().date.toDate ? doc.data().date.toDate().toISOString().split('T')[0] : doc.data().date,
+          type: doc.data().type,
+          exercises: doc.data().exercises,
+          timestamp: doc.data().timestamp
+        }));
+        console.log("Fetched workouts data:", workoutsData);
+        setWorkouts(workoutsData);
+      } catch (error) {
+        console.error("Error fetching workouts:", error);
+      } finally {
+        setLoading(false);
+      }
     };
     fetchWorkouts();
   }, []);
 
-  // Отметка дней с тренировками
-  const tileContent = ({ date }) => {
-    const workout = workouts.find(w => w.date === date.toISOString().split('T')[0]);
-    if (workout && workoutTypes[workout.type]) {
-      return <span style={{ color: workoutTypes[workout.type].color }}>{workoutTypes[workout.type].icon}</span>;
-    }
-    return null;
-  };
+const tileContent = ({ date }) => {
+  if (loading || !workouts.length) return null;
+  const dateStr = date.toISOString().split('T')[0];
+  const workout = workouts.find(w => w.date === dateStr);
+  console.log("Tile date:", dateStr, "Workouts checked:", workouts.map(w => w.date), "Found workout:", workout);
+  if (workout && workoutTypes[workout.type]) {
+    return (
+      <span
+        style={{
+          display: 'block', // Убедимся, что элемент виден
+          width: '15px',
+          height: '15px',
+          backgroundColor: workoutTypes[workout.type].color,
+          borderRadius: '50%',
+          margin: '0 auto',
+//          border: '2px solid yellow', // Отладочная яркая граница
+          position: 'relative', // Убедимся, что элемент на верхнем слое
+          zIndex: 1 // Поднимаем над другими элементами
+        }}
+      />
+    );
+  }
+  return null;
+};
 
-  // Обработчик клика по дню
   const onDateChange = (date) => {
     setSelectedDate(date);
     const workout = workouts.find(w => w.date === date.toISOString().split('T')[0]);
     setSelectedWorkout(workout || null);
-    if (workout) setSelectedType(workout.type); // Устанавливаем текущий тип для существующей тренировки
+    if (workout) setSelectedType(workout.type);
   };
 
-  // Добавление нового упражнения
   const addExercise = async (e) => {
     e.preventDefault();
     const exerciseData = {
@@ -53,17 +78,15 @@ function App() {
     };
 
     if (!selectedWorkout) {
-      // Создаём новую тренировку, если её нет
       const docRef = await addDoc(collection(db, "workouts"), {
         date: selectedDate.toISOString().split('T')[0],
-        type: selectedType, // Используем выбранный тип
+        type: selectedType,
         exercises: [exerciseData],
         timestamp: new Date()
       });
       setWorkouts([...workouts, { id: docRef.id, date: selectedDate.toISOString().split('T')[0], type: selectedType, exercises: [exerciseData], timestamp: new Date() }]);
       setSelectedWorkout({ id: docRef.id, date: selectedDate.toISOString().split('T')[0], type: selectedType, exercises: [exerciseData], timestamp: new Date() });
     } else {
-      // Обновляем существующую тренировку
       const updatedExercises = [...selectedWorkout.exercises, exerciseData];
       const workoutDocRef = doc(db, "workouts", selectedWorkout.id);
       await updateDoc(workoutDocRef, { exercises: updatedExercises, timestamp: new Date() });
@@ -79,6 +102,7 @@ function App() {
       <p>Приложение-дневник тренировок (Firebase подключён)</p>
       <div className="mt-4">
         <Calendar
+          key={workouts.length} // Принудительный перерендеринг при изменении данных
           onChange={onDateChange}
           value={selectedDate}
           tileContent={tileContent}
@@ -113,7 +137,7 @@ function App() {
                 >
                   {Object.keys(workoutTypes).map((type) => (
                     <option key={type} value={type}>
-                      {type} {workoutTypes[type].icon}
+                      {type}
                     </option>
                   ))}
                 </Form.Select>
@@ -170,6 +194,18 @@ function App() {
             </Col>
           </Row>
         </Form>
+      </div>
+
+      <div className="mt-4">
+        <h3>Легенда типов тренировок</h3>
+        <ul className="legend-list">
+          {Object.entries(workoutTypes).map(([type, { color }]) => (
+            <li key={type} style={{ color: color }}>
+              <span style={{ backgroundColor: color, width: '15px', height: '15px', borderRadius: '50%', display: 'inline-block', marginRight: '5px' }}></span>
+              {type}
+            </li>
+          ))}
+        </ul>
       </div>
     </Container>
   );
