@@ -158,3 +158,13 @@ button:focus-visible {
   display: flex;
   align-items: center;
 }
+
+.add-button {
+  /* Базовые стили (опционально) */
+}
+
+@media (max-width: 768px) {
+  .add-button {
+    margin-top: 20px; /* Отступ 20px под кнопкой на мобильных */
+  }
+}

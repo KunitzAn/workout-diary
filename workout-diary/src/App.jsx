@@ -196,7 +196,7 @@ function App() {
               </Form.Group>
             </Col>
             <Col md={1} className="d-flex align-items-end">
-              <Button variant="primary" type="submit">
+              <Button variant="primary" type="submit" className="add-button">
                 Добавить
               </Button>
             </Col>
