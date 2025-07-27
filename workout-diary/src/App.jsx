@@ -36,30 +36,35 @@ function App() {
     fetchWorkouts();
   }, []);
 
-const tileContent = ({ date }) => {
-  if (loading || !workouts.length) return null;
-  const dateStr = date.toISOString().split('T')[0];
-  const workout = workouts.find(w => w.date === dateStr);
-  console.log("Tile date:", dateStr, "Workouts checked:", workouts.map(w => w.date), "Found workout:", workout);
-  if (workout && workoutTypes[workout.type]) {
-    return (
-      <span
-        style={{
-          display: 'block', // Убедимся, что элемент виден
-          width: '15px',
-          height: '15px',
-          backgroundColor: workoutTypes[workout.type].color,
-          borderRadius: '50%',
-          margin: '0 auto',
-//          border: '2px solid yellow', // Отладочная яркая граница
-          position: 'relative', // Убедимся, что элемент на верхнем слое
-          zIndex: 1 // Поднимаем над другими элементами
-        }}
-      />
-    );
-  }
-  return null;
-};
+  const tileContent = ({ date }) => {
+    if (loading || !workouts.length) return null;
+    const dateStr = date.toISOString().split('T')[0];
+    const workout = workouts.find(w => w.date === dateStr);
+    console.log("Tile date:", dateStr, "Workouts checked:", workouts.map(w => w.date), "Found workout:", workout);
+    if (workout && workoutTypes[workout.type]) {
+      return (
+        <span
+          style={{
+            display: 'block', // Убедимся, что элемент виден
+            width: '15px',
+            height: '15px',
+            backgroundColor: workoutTypes[workout.type].color,
+            borderRadius: '50%',
+            margin: '0 auto',
+            position: 'relative', // Убедимся, что элемент на верхнем слое
+            zIndex: 1 // Поднимаем над другими элементами
+          }}
+        />
+      );
+    }
+    return null;
+  };
+
+  const tileClassName = ({ date, view }) => {
+    if (view !== 'month') return null;
+    const dateStr = date.toISOString().split('T')[0];
+    return dateStr === selectedDate.toISOString().split('T')[0] ? 'selected-day' : null;
+  };
 
   const onDateChange = (date) => {
     setSelectedDate(date);
@@ -99,13 +104,13 @@ const tileContent = ({ date }) => {
   return (
     <Container>
       <h1>Workout Diary</h1>
-      <p>Приложение-дневник тренировок (Firebase подключён)</p>
       <div className="mt-4">
         <Calendar
           key={workouts.length} // Принудительный перерендеринг при изменении данных
           onChange={onDateChange}
           value={selectedDate}
           tileContent={tileContent}
+          tileClassName={tileClassName} // Добавляем кастомный класс для выделения
         />
       </div>
       <p className="mt-3">Выбрана дата: {selectedDate.toLocaleDateString()}</p>
@@ -130,17 +135,20 @@ const tileContent = ({ date }) => {
             <Col md={3}>
               <Form.Group controlId="formType">
                 <Form.Label>Тип тренировки</Form.Label>
-                <Form.Select
-                  value={selectedType}
-                  onChange={(e) => setSelectedType(e.target.value)}
-                  required
-                >
-                  {Object.keys(workoutTypes).map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
-                </Form.Select>
+             
+                  <Form.Select
+                    value={selectedType}
+                    onChange={(e) => setSelectedType(e.target.value)}
+                    required
+                  >
+                    {["верх", "низ", "фулбади"].map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </Form.Select>
+
+
               </Form.Group>
             </Col>
             <Col md={2}>
@@ -197,11 +205,11 @@ const tileContent = ({ date }) => {
       </div>
 
       <div className="mt-4">
-        <h3>Легенда типов тренировок</h3>
+        <h3>Типы тренировок</h3>
         <ul className="legend-list">
-          {Object.entries(workoutTypes).map(([type, { color }]) => (
-            <li key={type} style={{ color: color }}>
-              <span style={{ backgroundColor: color, width: '15px', height: '15px', borderRadius: '50%', display: 'inline-block', marginRight: '5px' }}></span>
+          {["верх", "низ", "фулбади"].map((type) => (
+            <li key={type} style={{ color: workoutTypes[type].color }}>
+              <span style={{ backgroundColor: workoutTypes[type].color, width: '15px', height: '15px', borderRadius: '50%', display: 'inline-block', marginRight: '5px' }}></span>
               {type}
             </li>
           ))}

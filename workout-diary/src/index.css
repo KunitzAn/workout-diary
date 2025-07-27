@@ -11,6 +11,13 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  --primary-upper: #f6416c;
+  --primary-lower: #00b8a9;
+  --primary-fullbody: #ffde7d;
+  --highlight: #f8f3d4;
+  --background: #ffffff; /* Или другой фон ячеек */
+  --text: #333333;
 }
 
 a {
@@ -84,8 +91,8 @@ button:focus-visible {
   overflow: visible;
   position: relative;
   padding: 2px;
-  background-color: #f6fcfb; /* Изменяем фон ячеек на белый */
-  color: #000000; /* Текст внутри ячеек */
+  background-color: var(--background);
+  color: var(--text);
   border: 1px solid #b2c6c3;
 }
 
@@ -96,10 +103,40 @@ button:focus-visible {
   border-radius: 50%;
   border: 2px solid #b2c6c3; /* Исправлено на корректный синтаксис */
   display: block !important;
+  position: relative; /* Убедимся, что кружок позиционируется корректно */
+  z-index: 2; /* Поднимаем кружок над фоном */
 }
 
 .react-calendar__tile--hasActive {
   background: #e0e0e0;
+}
+
+/* Выделение выбранного дня */
+.selected-day {
+  background-color: var(--highlight) !important; /* Используем твой цвет #f8f3d4 */
+  border-color: #35776d;
+  border-width: 2px;
+  font-weight: bold; /* Жирный текст */
+  position: relative; /* Для управления z-index */
+}
+
+.selected-day span {
+  /* Сохраняем кружок видимым и поверх фона */
+  background-color: inherit; /* Берем цвет из workoutTypes */
+  z-index: 3; /* Поднимаем выше фона ячейки */
+}
+
+/* Стили для формы и кнопок */
+.form-control,
+.form-select,
+.btn-primary {
+  background-color: var(--highlight) !important;
+  border-color: var(--highlight) !important;
+  color: var(--text) !important;
+}
+
+.btn-primary:hover {
+  background-color: color-mix(in srgb, var(--highlight) 80%, var(--text)) !important;
 }
 
 .form-row {

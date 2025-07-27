@@ -1,17 +1,14 @@
-import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, addDoc, getDocs } from 'firebase/firestore';
+import { initializeApp } from "firebase/app";
+import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBHGVv5nbyAS_SFoMo9z4pSgVfnAiqw6mI",
-  authDomain: "workoutdiary-610d0.firebaseapp.com",
-  projectId: "workoutdiary-610d0",
-  storageBucket: "workoutdiary-610d0.firebasestorage.app",
-  messagingSenderId: "760171999000",
-  appId: "1:760171999000:web:57e3a25ee97e74da98f86d",
-  measurementId: "G-L0D1YX2JC0"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-
-export { db };
+export const db = getFirestore(app);
