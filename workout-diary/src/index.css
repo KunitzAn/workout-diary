@@ -78,8 +78,52 @@ button:focus-visible {
   width: 100%;
   max-width: 400px;
   margin: 0 auto;
-  border: none;
-  font-family: Arial, sans-serif;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-family: Arial, Helvetica, sans-serif;
+  line-height: 1.125em;
+}
+
+.react-calendar__navigation__label {
+  color: #fff !important;
+  background-color: #000; /* Фон для контраста */
+  text-decoration: none !important; /* Убираем подчёркивание */
+  pointer-events: none; /* Отключаем кликабельность */
+}
+.react-calendar__navigation__arrow {
+  color: #fff !important;
+  text-decoration: none !important; /* Убираем подчёркивание */
+  pointer-events: auto; /* Оставляем кликабельность для навигации */
+}
+
+/* Для мобильных устройств */
+@media (max-width: 768px) {
+  .react-calendar__navigation__label,
+  .react-calendar__navigation__arrow {
+    color: #fff !important;
+    background-color: #000;
+    text-decoration: none !important;
+  }
+  .react-calendar__navigation__label {
+    pointer-events: none; /* Отключаем кликабельность заголовка на мобильных */
+  }
+}
+
+/* Убираем стили ссылок, если браузер добавляет их */
+.react-calendar__navigation a {
+  color: #fff !important;
+  text-decoration: none !important;
+  background: none !important;
+  border: none !important;
+}
+
+.react-calendar__navigation a:hover,
+.react-calendar__navigation a:focus {
+  color: #fff !important;
+  text-decoration: none !important;
+  background: none !important;
+  outline: none !important;
 }
 
 .react-calendar__tile {
