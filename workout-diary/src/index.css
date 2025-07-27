@@ -49,7 +49,7 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: #3a655e;
+  background-color: #6c757d;
   cursor: pointer;
   transition: border-color 0.25s;
 }
@@ -158,13 +158,22 @@ button:focus-visible {
   display: flex;
   align-items: center;
 }
-
 .add-button {
-  /* Базовые стили (опционально) */
+  margin-bottom: 10px; 
+  background-color: #6c757d !important;
+  color: white !important;
 }
-
+.add-new-ex-button {
+  margin-bottom: 10px; 
+  margin-top: 10px; 
+}
 @media (max-width: 768px) {
   .add-button {
     margin-top: 20px; /* Отступ 20px под кнопкой на мобильных */
   }
+}
+
+.newex-field {
+  margin-bottom: 10px; 
+  margin-top: 10px; 
 }

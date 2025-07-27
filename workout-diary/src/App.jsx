@@ -7,6 +7,7 @@ import { workoutTypes } from './constants.jsx';
 
 function App() {
   const [workouts, setWorkouts] = useState([]);
+  const [exercises, setExercises] = useState([]); // Список упражнений из базы
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedWorkout, setSelectedWorkout] = useState(null);
   const [newExercise, setNewExercise] = useState({ name: '', weight: '', sets: '', reps: '' });
@@ -33,7 +34,15 @@ function App() {
         setLoading(false);
       }
     };
+
+    const fetchExercises = async () => {
+      const querySnapshot = await getDocs(collection(db, "exercises"));
+      const exercisesData = querySnapshot.docs.map(doc => doc.data().name);
+      setExercises(exercisesData);
+    };
+
     fetchWorkouts();
+    fetchExercises();
   }, []);
 
   const tileContent = ({ date }) => {
@@ -45,14 +54,14 @@ function App() {
       return (
         <span
           style={{
-            display: 'block', // Убедимся, что элемент виден
+            display: 'block',
             width: '15px',
             height: '15px',
             backgroundColor: workoutTypes[workout.type].color,
             borderRadius: '50%',
             margin: '0 auto',
-            position: 'relative', // Убедимся, что элемент на верхнем слое
-            zIndex: 1 // Поднимаем над другими элементами
+            position: 'relative',
+            zIndex: 1
           }}
         />
       );
@@ -71,6 +80,16 @@ function App() {
     const workout = workouts.find(w => w.date === date.toISOString().split('T')[0]);
     setSelectedWorkout(workout || null);
     if (workout) setSelectedType(workout.type);
+  };
+
+  const deleteExercise = async (exerciseIndex) => {
+    if (!selectedWorkout) return;
+
+    const updatedExercises = selectedWorkout.exercises.filter((_, index) => index !== exerciseIndex);
+    const workoutDocRef = doc(db, "workouts", selectedWorkout.id);
+    await updateDoc(workoutDocRef, { exercises: updatedExercises, timestamp: new Date() });
+    setWorkouts(workouts.map(w => w.id === selectedWorkout.id ? { ...w, exercises: updatedExercises } : w));
+    setSelectedWorkout({ ...selectedWorkout, exercises: updatedExercises });
   };
 
   const addExercise = async (e) => {
@@ -106,11 +125,11 @@ function App() {
       <h1>Workout Diary</h1>
       <div className="mt-4">
         <Calendar
-          key={workouts.length} // Принудительный перерендеринг при изменении данных
+          key={workouts.length}
           onChange={onDateChange}
           value={selectedDate}
           tileContent={tileContent}
-          tileClassName={tileClassName} // Добавляем кастомный класс для выделения
+          tileClassName={tileClassName}
         />
       </div>
       <p className="mt-3">Выбрана дата: {selectedDate.toLocaleDateString()}</p>
@@ -120,8 +139,16 @@ function App() {
           <h3>Упражнения для {selectedDate.toLocaleDateString()}</h3>
           <ListGroup>
             {selectedWorkout.exercises.map((exercise, index) => (
-              <ListGroup.Item key={index}>
+              <ListGroup.Item key={index} className="d-flex justify-content-between align-items-center">
                 {exercise.name}: {exercise.weight} кг, {exercise.sets} x {exercise.reps}
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={() => deleteExercise(index)}
+                  className="ms-2"
+                >
+                  Удалить
+                </Button>
               </ListGroup.Item>
             ))}
           </ListGroup>
@@ -135,31 +162,35 @@ function App() {
             <Col md={3}>
               <Form.Group controlId="formType">
                 <Form.Label>Тип тренировки</Form.Label>
-             
-                  <Form.Select
-                    value={selectedType}
-                    onChange={(e) => setSelectedType(e.target.value)}
-                    required
-                  >
-                    {["верх", "низ", "фулбади"].map((type) => (
-                      <option key={type} value={type}>
-                        {type}
-                      </option>
-                    ))}
-                  </Form.Select>
-
-
+                <Form.Select
+                  value={selectedType}
+                  onChange={(e) => setSelectedType(e.target.value)}
+                  required
+                >
+                  {["верх", "низ", "фулбади", "ягодицы+плечи"].map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </Form.Select>
               </Form.Group>
             </Col>
             <Col md={2}>
-              <Form.Group controlId="formName">
-                <Form.Label>Название</Form.Label>
+              <Form.Group controlId="formExerciseName">
+                <Form.Label>Упражнение</Form.Label>
                 <Form.Control
-                  type="text"
+                  as="select"
                   value={newExercise.name}
                   onChange={(e) => setNewExercise({ ...newExercise, name: e.target.value })}
                   required
-                />
+                >
+                  <option value="">Выберите или введите новое</option>
+                  {exercises.map((exercise, index) => (
+                    <option key={index} value={exercise}>
+                      {exercise}
+                    </option>
+                  ))}
+                </Form.Control>
               </Form.Group>
             </Col>
             <Col md={2}>
@@ -199,6 +230,32 @@ function App() {
               <Button variant="primary" type="submit" className="add-button">
                 Добавить
               </Button>
+            </Col>
+          </Row>
+        </Form>
+        <Form onSubmit={(e) => {
+          e.preventDefault();
+          const trimmedName = newExercise.name.trim();
+          if (trimmedName && !exercises.includes(trimmedName)) {
+            addDoc(collection(db, "exercises"), { name: trimmedName, createdAt: new Date() });
+            setExercises([...exercises, trimmedName]);
+            setNewExercise(prev => ({ ...prev, name: trimmedName }));
+          } else if (!trimmedName) {
+            alert("Введите название упражнения!");
+          }
+        }}>
+          <Row>
+            <Col md={3}>
+              <Form.Control
+                type="text"
+                className="newex-field"
+                placeholder="Новое упражнение"
+                value={newExercise.name === "" ? "" : newExercise.name}
+                onChange={(e) => setNewExercise({ ...newExercise, name: e.target.value })}
+              />
+            </Col>
+            <Col md={1}>
+              <Button variant="secondary" type="submit" className="add-new-ex-button">Добавить в базу</Button>
             </Col>
           </Row>
         </Form>
