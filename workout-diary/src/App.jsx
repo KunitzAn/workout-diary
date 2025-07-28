@@ -184,7 +184,7 @@ return (
           </div>
         ) : (
           <>
-        <h1>Workout Diary - {user.email}</h1>
+        <h1>Workout Diary</h1>
         <Button variant="danger" className="mt-2" onClick={() => signOut(auth)}>Выйти</Button>
         <div className="mt-4">
           <Calendar
