@@ -3,7 +3,7 @@ import Calendar from 'react-calendar';
 import { useState, useEffect } from 'react';
 import { db, auth } from './firebase';
 import { collection, getDocs, addDoc, updateDoc, doc, query, where } from 'firebase/firestore';
-import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
+import { onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { workoutTypes } from './constants.jsx';
 
 
@@ -14,15 +14,16 @@ function App() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedWorkout, setSelectedWorkout] = useState(null);
   const [newExercise, setNewExercise] = useState({ name: '', weight: '', sets: '', reps: '' });
-  const [selectedType, setSelectedType] = useState("низ");
+  const [selectedType, setSelectedType] = useState("ягодицы+плечи");
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
   useEffect(() => {
+    console.log("SessionStorage available:", typeof sessionStorage !== 'undefined' && sessionStorage);
     const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      console.log("Current user:", currentUser); // Добавь для отладки
+      console.log("Current user:", currentUser);
       if (currentUser) {
         const fetchData = async () => {
           setLoading(true);
@@ -50,6 +51,10 @@ function App() {
           }
         };
         fetchData();
+      } else {
+        console.log("No user authenticated, clearing data");
+        setWorkouts([]);
+        setExercises([]);
       }
     });
     return () => unsubscribeAuth();
@@ -138,47 +143,47 @@ function App() {
 return (
   <Container>
     {!user ? (
-      <div className="mt-4">
-        <h2>Авторизация</h2>
-        <Form>
-          <Form.Group controlId="formEmail">
-            <Form.Label>Email</Form.Label>
-            <Form.Control
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Введите email"
-            />
-          </Form.Group>
-          <Form.Group controlId="formPassword">
-            <Form.Label>Пароль</Form.Label>
-            <Form.Control
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Введите пароль"
-            />
-          </Form.Group>
-          <Button
-            variant="primary"
-            className="mt-2"
-            onClick={() => createUserWithEmailAndPassword(auth, email, password)
-              .catch((error) => alert(error.message))}
-          >
-            Зарегистрироваться
-          </Button>
-          <Button
-            variant="primary"
-            className="mt-2 ms-2"
-            onClick={() => signInWithPopup(auth, new GoogleAuthProvider())
-              .catch((error) => alert(error.message))}
-          >
-            Войти через Google
-          </Button>
-        </Form>
-      </div>
-    ) : (
-      <>
+          <div className="mt-4">
+            <h2>Авторизация</h2>
+            <Form>
+              <Form.Group controlId="formEmail">
+                <Form.Label>Email</Form.Label>
+                <Form.Control
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Введите email"
+                />
+              </Form.Group>
+              <Form.Group controlId="formPassword">
+                <Form.Label>Пароль</Form.Label>
+                <Form.Control
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Введите пароль"
+                />
+              </Form.Group>
+              <Button
+                variant="primary"
+                className="mt-2"
+                onClick={() => createUserWithEmailAndPassword(auth, email, password)
+                  .catch((error) => alert(error.message))}
+              >
+                Зарегистрироваться
+              </Button>
+              <Button
+                variant="primary"
+                className="mt-2 ms-2"
+                onClick={() => signInWithEmailAndPassword(auth, email, password)
+                  .catch((error) => alert(error.message))}
+              >
+                Войти
+              </Button>
+            </Form>
+          </div>
+        ) : (
+          <>
         <h1>Workout Diary - {user.email}</h1>
         <Button variant="danger" className="mt-2" onClick={() => signOut(auth)}>Выйти</Button>
         <div className="mt-4">
