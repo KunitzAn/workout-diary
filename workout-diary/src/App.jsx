@@ -19,48 +19,55 @@ function App() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  useEffect(() => {
-    console.log("SessionStorage available:", typeof sessionStorage !== 'undefined' && sessionStorage);
-    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      console.log("Current user:", currentUser);
-      if (currentUser) {
-        const fetchData = async () => {
-          setLoading(true);
-          try {
-            const workoutsQuery = query(collection(db, "workouts"), where("userId", "==", currentUser.uid));
-            const querySnapshot = await getDocs(workoutsQuery);
-            const workoutsData = querySnapshot.docs.map(doc => ({
-              id: doc.id,
-              date: doc.data().date.toDate ? doc.data().date.toDate().toISOString().split('T')[0] : doc.data().date,
-              type: doc.data().type,
-              exercises: doc.data().exercises,
-              timestamp: doc.data().timestamp,
-              userId: doc.data().userId
-            }));
-            console.log("Fetched workouts data:", workoutsData);
-            setWorkouts(workoutsData);
+useEffect(() => {
+  console.log("SessionStorage available:", typeof sessionStorage !== 'undefined' && sessionStorage);
+  const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+    setUser(currentUser);
+    console.log("Current user:", currentUser);
+    if (currentUser) {
+      const fetchData = async () => {
+        setLoading(true);
+        try {
+          const workoutsQuery = query(collection(db, "workouts"), where("userId", "==", currentUser.uid));
+          const querySnapshot = await getDocs(workoutsQuery);
+          const workoutsData = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            date: doc.data().date.toDate ? doc.data().date.toDate().toISOString().split('T')[0] : doc.data().date,
+            type: doc.data().type,
+            exercises: doc.data().exercises,
+            timestamp: doc.data().timestamp,
+            userId: doc.data().userId
+          }));
+          console.log("Fetched workouts data:", workoutsData);
+          setWorkouts(workoutsData);
 
-            // Загружаем упражнения для текущего пользователя
-            const userExercisesQuery = query(collection(db, "userExercises"), where("userId", "==", currentUser.uid));
-            const userExercisesSnapshot = await getDocs(userExercisesQuery);
-            const userExercisesData = userExercisesSnapshot.docs.map(doc => doc.data().exercises).flat();
-            setExercises(userExercisesData || []);
-          } catch (error) {
-            console.error("Error fetching data:", error);
-          } finally {
-            setLoading(false);
+          const userExercisesQuery = query(collection(db, "userExercises"), where("userId", "==", currentUser.uid));
+          const userExercisesSnapshot = await getDocs(userExercisesQuery);
+          if (userExercisesSnapshot.empty) {
+            console.log("No userExercises document found, creating default for:", currentUser.uid);
+            await addDoc(collection(db, "userExercises"), {
+              exercises: [],
+              userId: currentUser.uid
+            });
           }
-        };
-        fetchData();
-      } else {
-        console.log("No user authenticated, clearing data");
-        setWorkouts([]);
-        setExercises([]);
-      }
-    });
-    return () => unsubscribeAuth();
-  }, []);
+          const userExercisesData = userExercisesSnapshot.docs.length > 0 ? userExercisesSnapshot.docs[0].data().exercises || [] : [];
+          console.log("Fetched user exercises data:", userExercisesData);
+          setExercises(userExercisesData);
+        } catch (error) {
+          console.error("Error fetching data:", error);
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchData();
+    } else {
+      console.log("No user authenticated, clearing data");
+      setWorkouts([]);
+      setExercises([]);
+    }
+  });
+  return () => unsubscribeAuth();
+}, []);
 
   const tileContent = ({ date }) => {
     if (loading || !workouts.length) return null;
@@ -118,69 +125,72 @@ function App() {
     }
   };
 
-  const addExercise = async (e) => {
-    e.preventDefault();
-    if (!user) return;
+const addExercise = async (e) => {
+  e.preventDefault();
+  if (!user) return;
 
-    const exerciseData = {
-      name: newExercise.name,
-      weight: parseFloat(newExercise.weight) || 0,
-      sets: parseInt(newExercise.sets) || 0,
-      reps: parseInt(newExercise.reps) || 0
-    };
+  const exerciseData = {
+    name: newExercise.name,
+    weight: parseFloat(newExercise.weight) || 0,
+    sets: parseInt(newExercise.sets) || 0,
+    reps: parseInt(newExercise.reps) || 0
+  };
 
-    const dateStr = selectedDate.toISOString().split('T')[0];
-    const existingWorkout = workouts.find(w => w.date === dateStr);
+  const dateStr = selectedDate.toISOString().split('T')[0];
+  const existingWorkout = workouts.find(w => w.date === dateStr);
 
-    if (existingWorkout) {
-      setSelectedType(existingWorkout.type);
-    }
+  if (existingWorkout) {
+    setSelectedType(existingWorkout.type);
+  }
 
-    if (!selectedWorkout) {
-      const docRef = await addDoc(collection(db, "workouts"), {
-        date: dateStr,
-        type: selectedType,
-        exercises: [exerciseData],
-        timestamp: new Date(),
-        userId: user.uid
-      });
-      setWorkouts([...workouts, { id: docRef.id, date: dateStr, type: selectedType, exercises: [exerciseData], timestamp: new Date(), userId: user.uid }]);
-      setSelectedWorkout({ id: docRef.id, date: dateStr, type: selectedType, exercises: [exerciseData], timestamp: new Date(), userId: user.uid });
-    } else {
-      const updatedExercises = [...selectedWorkout.exercises, exerciseData];
-      const workoutDocRef = doc(db, "workouts", selectedWorkout.id);
-      await updateDoc(workoutDocRef, { exercises: updatedExercises, timestamp: new Date() });
-      setWorkouts(workouts.map(w => w.id === selectedWorkout.id ? { ...w, exercises: updatedExercises } : w));
-      setSelectedWorkout({ ...selectedWorkout, exercises: updatedExercises });
-    }
+  if (!selectedWorkout) {
+    const docRef = await addDoc(collection(db, "workouts"), {
+      date: dateStr,
+      type: selectedType,
+      exercises: [exerciseData],
+      timestamp: new Date(),
+      userId: user.uid
+    });
+    setWorkouts([...workouts, { id: docRef.id, date: dateStr, type: selectedType, exercises: [exerciseData], timestamp: new Date(), userId: user.uid }]);
+    setSelectedWorkout({ id: docRef.id, date: dateStr, type: selectedType, exercises: [exerciseData], timestamp: new Date(), userId: user.uid });
+  } else {
+    const updatedExercises = [...selectedWorkout.exercises, exerciseData];
+    const workoutDocRef = doc(db, "workouts", selectedWorkout.id);
+    await updateDoc(workoutDocRef, { exercises: updatedExercises, timestamp: new Date() });
+    setWorkouts(workouts.map(w => w.id === selectedWorkout.id ? { ...w, exercises: updatedExercises } : w));
+    setSelectedWorkout({ ...selectedWorkout, exercises: updatedExercises });
+  }
 
-    // Добавляем упражнение в список пользователя
+  // Добавляем упражнение в список пользователя
+  if (newExercise.name && newExercise.name.trim()) {
+    console.log("Attempting to add exercise:", newExercise.name.trim(), "for user:", user.uid);
     const userExercisesQuery = query(collection(db, "userExercises"), where("userId", "==", user.uid));
     const userExercisesSnapshot = await getDocs(userExercisesQuery);
     const userExerciseDoc = userExercisesSnapshot.docs[0];
-    if (newExercise.name.trim() && !exercises.includes(newExercise.name.trim())) {
-      if (userExerciseDoc) {
-        const currentExercises = userExerciseDoc.data().exercises || [];
-        if (!currentExercises.includes(newExercise.name.trim())) {
-          await updateDoc(doc(db, "userExercises", userExerciseDoc.id), {
-            exercises: [...currentExercises, newExercise.name.trim()],
-            userId: user.uid
-          });
-        }
-      } else {
-        await addDoc(collection(db, "userExercises"), {
-          exercises: [newExercise.name.trim()],
+    if (userExerciseDoc) {
+      const currentExercises = userExerciseDoc.data().exercises || [];
+      if (!currentExercises.includes(newExercise.name.trim())) {
+        console.log("Updating existing document with exercise:", newExercise.name.trim());
+        await updateDoc(doc(db, "userExercises", userExerciseDoc.id), {
+          exercises: [...currentExercises, newExercise.name.trim()],
           userId: user.uid
         });
+        setExercises(prev => [...prev, newExercise.name.trim()]);
       }
-      setExercises([...exercises, newExercise.name.trim()]);
-    } else if (!newExercise.name.trim()) {
-      alert("Введите название упражнения!");
+    } else {
+      console.log("Creating new userExercises document for:", user.uid);
+      await addDoc(collection(db, "userExercises"), {
+        exercises: [newExercise.name.trim()],
+        userId: user.uid
+      });
+      setExercises(prev => [...prev, newExercise.name.trim()]);
     }
+  } else {
+    console.log("No valid exercise name provided:", newExercise.name);
+  }
 
-    setNewExercise({ name: '', weight: '', sets: '', reps: '' });
-  };
-
+  setNewExercise({ name: '', weight: '', sets: '', reps: '' });
+};
 
 
 return (
@@ -343,13 +353,32 @@ return (
               </Col>
             </Row>
           </Form>
-          <Form onSubmit={(e) => {
+
+          <Form onSubmit={async (e) => {
             e.preventDefault();
             const trimmedName = newExercise.name.trim();
             if (trimmedName && !exercises.includes(trimmedName)) {
-              addDoc(collection(db, "exercises"), { name: trimmedName, createdAt: new Date() });
-              setExercises([...exercises, trimmedName]);
-              setNewExercise(prev => ({ ...prev, name: trimmedName }));
+              console.log("Adding new exercise to userExercises:", trimmedName, "for user:", user.uid);
+              const userExercisesQuery = query(collection(db, "userExercises"), where("userId", "==", user.uid));
+              const userExercisesSnapshot = await getDocs(userExercisesQuery);
+              const userExerciseDoc = userExercisesSnapshot.docs[0];
+              if (userExerciseDoc) {
+                const currentExercises = userExerciseDoc.data().exercises || [];
+                if (!currentExercises.includes(trimmedName)) {
+                  await updateDoc(doc(db, "userExercises", userExerciseDoc.id), {
+                    exercises: [...currentExercises, trimmedName],
+                    userId: user.uid
+                  });
+                  setExercises([...exercises, trimmedName]);
+                }
+              } else {
+                await addDoc(collection(db, "userExercises"), {
+                  exercises: [trimmedName],
+                  userId: user.uid
+                });
+                setExercises([...exercises, trimmedName]);
+              }
+              setNewExercise(prev => ({ ...prev, name: '' }));
             } else if (!trimmedName) {
               alert("Введите название упражнения!");
             }
@@ -360,7 +389,7 @@ return (
                   type="text"
                   className="newex-field"
                   placeholder="Новое упражнение"
-                  value={newExercise.name === "" ? "" : newExercise.name}
+                  value={newExercise.name}
                   onChange={(e) => setNewExercise({ ...newExercise, name: e.target.value })}
                 />
               </Col>
@@ -369,6 +398,7 @@ return (
               </Col>
             </Row>
           </Form>
+
         </div>
 
         <div className="mt-4">
