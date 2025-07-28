@@ -79,7 +79,7 @@ button:focus-visible {
   max-width: 400px;
   margin: 0 auto;
   background: #fff;
-  border: 1px solid #ddd;
+  border: none; /* Убираем рамку */
   border-radius: 4px;
   font-family: Arial, Helvetica, sans-serif;
   line-height: 1.125em;
@@ -87,12 +87,13 @@ button:focus-visible {
 
 .react-calendar__navigation__label {
   color: #fff !important;
-  background-color: #000; /* Фон для контраста */
+  background-color: #6c757d; /* Меняем фон на серый #6c757d */
   text-decoration: none !important; /* Убираем подчёркивание */
   pointer-events: none; /* Отключаем кликабельность */
 }
 .react-calendar__navigation__arrow {
   color: #fff !important;
+  background-color: #6c757d; 
   text-decoration: none !important; /* Убираем подчёркивание */
   pointer-events: auto; /* Оставляем кликабельность для навигации */
 }
@@ -102,7 +103,7 @@ button:focus-visible {
   .react-calendar__navigation__label,
   .react-calendar__navigation__arrow {
     color: #fff !important;
-    background-color: #000;
+    background-color: #6c757d; /* Обновляем фон для мобильных */
     text-decoration: none !important;
   }
   .react-calendar__navigation__label {
@@ -122,7 +123,8 @@ button:focus-visible {
 .react-calendar__navigation a:focus {
   color: #fff !important;
   text-decoration: none !important;
-  background: none !important;
+  /*background: none !important;*/
+  background-color: #6c757d !important;
   outline: none !important;
 }
 
