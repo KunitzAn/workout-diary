@@ -2,7 +2,7 @@ import { Container, Button, ListGroup, Form, Row, Col } from 'react-bootstrap';
 import Calendar from 'react-calendar';
 import { useState, useEffect } from 'react';
 import { db, auth } from './firebase';
-import { collection, getDocs, addDoc, updateDoc, doc, query, where } from 'firebase/firestore';
+import { collection, getDocs, addDoc, updateDoc, doc, query, where, deleteDoc } from 'firebase/firestore';
 import { onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from 'firebase/auth';
 import { workoutTypes } from './constants.jsx';
 
@@ -41,9 +41,11 @@ function App() {
             console.log("Fetched workouts data:", workoutsData);
             setWorkouts(workoutsData);
 
-            const exercisesQuery = await getDocs(collection(db, "exercises"));
-            const exercisesData = exercisesQuery.docs.map(doc => doc.data().name);
-            setExercises(exercisesData);
+            // Загружаем упражнения для текущего пользователя
+            const userExercisesQuery = query(collection(db, "userExercises"), where("userId", "==", currentUser.uid));
+            const userExercisesSnapshot = await getDocs(userExercisesQuery);
+            const userExercisesData = userExercisesSnapshot.docs.map(doc => doc.data().exercises).flat();
+            setExercises(userExercisesData || []);
           } catch (error) {
             console.error("Error fetching data:", error);
           } finally {
@@ -64,8 +66,8 @@ function App() {
     if (loading || !workouts.length) return null;
     const dateStr = date.toISOString().split('T')[0];
     const workout = workouts.find(w => w.date === dateStr);
-    console.log("Tile date:", dateStr, "Workouts checked:", workouts.map(w => w.date), "Found workout:", workout);
-    if (workout && workoutTypes[workout.type]) {
+    console.log("Tile date:", dateStr, "Workout:", workout);
+    if (workout && workout.exercises && workout.exercises.length > 0 && workoutTypes[workout.type]) {
       return (
         <span
           style={{
@@ -102,9 +104,18 @@ function App() {
 
     const updatedExercises = selectedWorkout.exercises.filter((_, index) => index !== exerciseIndex);
     const workoutDocRef = doc(db, "workouts", selectedWorkout.id);
-    await updateDoc(workoutDocRef, { exercises: updatedExercises, timestamp: new Date() });
-    setWorkouts(workouts.map(w => w.id === selectedWorkout.id ? { ...w, exercises: updatedExercises } : w));
-    setSelectedWorkout({ ...selectedWorkout, exercises: updatedExercises });
+
+    if (updatedExercises.length === 0) {
+      // Удаляем документ, если больше нет упражнений
+      await deleteDoc(workoutDocRef);
+      setWorkouts(workouts.filter(w => w.id !== selectedWorkout.id));
+      setSelectedWorkout(null);
+    } else {
+      // Обновляем документ, если остались упражнения
+      await updateDoc(workoutDocRef, { exercises: updatedExercises, timestamp: new Date() });
+      setWorkouts(workouts.map(w => w.id === selectedWorkout.id ? { ...w, exercises: updatedExercises } : w));
+      setSelectedWorkout({ ...selectedWorkout, exercises: updatedExercises });
+    }
   };
 
   const addExercise = async (e) => {
@@ -118,16 +129,23 @@ function App() {
       reps: parseInt(newExercise.reps) || 0
     };
 
+    const dateStr = selectedDate.toISOString().split('T')[0];
+    const existingWorkout = workouts.find(w => w.date === dateStr);
+
+    if (existingWorkout) {
+      setSelectedType(existingWorkout.type);
+    }
+
     if (!selectedWorkout) {
       const docRef = await addDoc(collection(db, "workouts"), {
-        date: selectedDate.toISOString().split('T')[0],
+        date: dateStr,
         type: selectedType,
         exercises: [exerciseData],
         timestamp: new Date(),
-        userId: user.uid // Убедимся, что userId передаётся
+        userId: user.uid
       });
-      setWorkouts([...workouts, { id: docRef.id, date: selectedDate.toISOString().split('T')[0], type: selectedType, exercises: [exerciseData], timestamp: new Date(), userId: user.uid }]);
-      setSelectedWorkout({ id: docRef.id, date: selectedDate.toISOString().split('T')[0], type: selectedType, exercises: [exerciseData], timestamp: new Date(), userId: user.uid });
+      setWorkouts([...workouts, { id: docRef.id, date: dateStr, type: selectedType, exercises: [exerciseData], timestamp: new Date(), userId: user.uid }]);
+      setSelectedWorkout({ id: docRef.id, date: dateStr, type: selectedType, exercises: [exerciseData], timestamp: new Date(), userId: user.uid });
     } else {
       const updatedExercises = [...selectedWorkout.exercises, exerciseData];
       const workoutDocRef = doc(db, "workouts", selectedWorkout.id);
@@ -135,6 +153,31 @@ function App() {
       setWorkouts(workouts.map(w => w.id === selectedWorkout.id ? { ...w, exercises: updatedExercises } : w));
       setSelectedWorkout({ ...selectedWorkout, exercises: updatedExercises });
     }
+
+    // Добавляем упражнение в список пользователя
+    const userExercisesQuery = query(collection(db, "userExercises"), where("userId", "==", user.uid));
+    const userExercisesSnapshot = await getDocs(userExercisesQuery);
+    const userExerciseDoc = userExercisesSnapshot.docs[0];
+    if (newExercise.name.trim() && !exercises.includes(newExercise.name.trim())) {
+      if (userExerciseDoc) {
+        const currentExercises = userExerciseDoc.data().exercises || [];
+        if (!currentExercises.includes(newExercise.name.trim())) {
+          await updateDoc(doc(db, "userExercises", userExerciseDoc.id), {
+            exercises: [...currentExercises, newExercise.name.trim()],
+            userId: user.uid
+          });
+        }
+      } else {
+        await addDoc(collection(db, "userExercises"), {
+          exercises: [newExercise.name.trim()],
+          userId: user.uid
+        });
+      }
+      setExercises([...exercises, newExercise.name.trim()]);
+    } else if (!newExercise.name.trim()) {
+      alert("Введите название упражнения!");
+    }
+
     setNewExercise({ name: '', weight: '', sets: '', reps: '' });
   };
 
@@ -222,6 +265,7 @@ return (
           <h3>Добавить упражнение</h3>
           <Form onSubmit={addExercise}>
             <Row>
+
               <Col md={3}>
                 <Form.Group controlId="formType">
                   <Form.Label>Тип тренировки</Form.Label>
@@ -229,8 +273,9 @@ return (
                     value={selectedType}
                     onChange={(e) => setSelectedType(e.target.value)}
                     required
+                    disabled={!!workouts.find(w => w.date === selectedDate.toISOString().split('T')[0])}
                   >
-                    {["верх", "низ", "фулбади", "ягодицы+плечи"].map((type) => (
+                    {["верх", "низ", "фулбади"].map((type) => (
                       <option key={type} value={type}>
                         {type}
                       </option>
@@ -238,6 +283,7 @@ return (
                   </Form.Select>
                 </Form.Group>
               </Col>
+
               <Col md={2}>
                 <Form.Group controlId="formExerciseName">
                   <Form.Label>Упражнение</Form.Label>
@@ -256,6 +302,7 @@ return (
                   </Form.Control>
                 </Form.Group>
               </Col>
+
               <Col md={2}>
                 <Form.Group controlId="formWeight">
                   <Form.Label>Вес (кг)</Form.Label>
