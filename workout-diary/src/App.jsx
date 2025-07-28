@@ -1,48 +1,58 @@
 import { Container, Button, ListGroup, Form, Row, Col } from 'react-bootstrap';
 import Calendar from 'react-calendar';
 import { useState, useEffect } from 'react';
-import { db } from './firebase';
-import { collection, getDocs, addDoc, updateDoc, doc } from 'firebase/firestore';
+import { db, auth } from './firebase';
+import { collection, getDocs, addDoc, updateDoc, doc, query, where } from 'firebase/firestore';
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { workoutTypes } from './constants.jsx';
 
+
 function App() {
+  const [user, setUser] = useState(null);
   const [workouts, setWorkouts] = useState([]);
-  const [exercises, setExercises] = useState([]); // Список упражнений из базы
+  const [exercises, setExercises] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedWorkout, setSelectedWorkout] = useState(null);
   const [newExercise, setNewExercise] = useState({ name: '', weight: '', sets: '', reps: '' });
-  const [selectedType, setSelectedType] = useState("ягодицы+плечи");
+  const [selectedType, setSelectedType] = useState("низ");
   const [loading, setLoading] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   useEffect(() => {
-    const fetchWorkouts = async () => {
-      setLoading(true);
-      try {
-        const querySnapshot = await getDocs(collection(db, "workouts"));
-        const workoutsData = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          date: doc.data().date.toDate ? doc.data().date.toDate().toISOString().split('T')[0] : doc.data().date,
-          type: doc.data().type,
-          exercises: doc.data().exercises,
-          timestamp: doc.data().timestamp
-        }));
-        console.log("Fetched workouts data:", workoutsData);
-        setWorkouts(workoutsData);
-      } catch (error) {
-        console.error("Error fetching workouts:", error);
-      } finally {
-        setLoading(false);
+    const unsubscribeAuth = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      console.log("Current user:", currentUser); // Добавь для отладки
+      if (currentUser) {
+        const fetchData = async () => {
+          setLoading(true);
+          try {
+            const workoutsQuery = query(collection(db, "workouts"), where("userId", "==", currentUser.uid));
+            const querySnapshot = await getDocs(workoutsQuery);
+            const workoutsData = querySnapshot.docs.map(doc => ({
+              id: doc.id,
+              date: doc.data().date.toDate ? doc.data().date.toDate().toISOString().split('T')[0] : doc.data().date,
+              type: doc.data().type,
+              exercises: doc.data().exercises,
+              timestamp: doc.data().timestamp,
+              userId: doc.data().userId
+            }));
+            console.log("Fetched workouts data:", workoutsData);
+            setWorkouts(workoutsData);
+
+            const exercisesQuery = await getDocs(collection(db, "exercises"));
+            const exercisesData = exercisesQuery.docs.map(doc => doc.data().name);
+            setExercises(exercisesData);
+          } catch (error) {
+            console.error("Error fetching data:", error);
+          } finally {
+            setLoading(false);
+          }
+        };
+        fetchData();
       }
-    };
-
-    const fetchExercises = async () => {
-      const querySnapshot = await getDocs(collection(db, "exercises"));
-      const exercisesData = querySnapshot.docs.map(doc => doc.data().name);
-      setExercises(exercisesData);
-    };
-
-    fetchWorkouts();
-    fetchExercises();
+    });
+    return () => unsubscribeAuth();
   }, []);
 
   const tileContent = ({ date }) => {
@@ -83,7 +93,7 @@ function App() {
   };
 
   const deleteExercise = async (exerciseIndex) => {
-    if (!selectedWorkout) return;
+    if (!selectedWorkout || !user) return;
 
     const updatedExercises = selectedWorkout.exercises.filter((_, index) => index !== exerciseIndex);
     const workoutDocRef = doc(db, "workouts", selectedWorkout.id);
@@ -94,6 +104,8 @@ function App() {
 
   const addExercise = async (e) => {
     e.preventDefault();
+    if (!user) return;
+
     const exerciseData = {
       name: newExercise.name,
       weight: parseFloat(newExercise.weight) || 0,
@@ -106,10 +118,11 @@ function App() {
         date: selectedDate.toISOString().split('T')[0],
         type: selectedType,
         exercises: [exerciseData],
-        timestamp: new Date()
+        timestamp: new Date(),
+        userId: user.uid // Убедимся, что userId передаётся
       });
-      setWorkouts([...workouts, { id: docRef.id, date: selectedDate.toISOString().split('T')[0], type: selectedType, exercises: [exerciseData], timestamp: new Date() }]);
-      setSelectedWorkout({ id: docRef.id, date: selectedDate.toISOString().split('T')[0], type: selectedType, exercises: [exerciseData], timestamp: new Date() });
+      setWorkouts([...workouts, { id: docRef.id, date: selectedDate.toISOString().split('T')[0], type: selectedType, exercises: [exerciseData], timestamp: new Date(), userId: user.uid }]);
+      setSelectedWorkout({ id: docRef.id, date: selectedDate.toISOString().split('T')[0], type: selectedType, exercises: [exerciseData], timestamp: new Date(), userId: user.uid });
     } else {
       const updatedExercises = [...selectedWorkout.exercises, exerciseData];
       const workoutDocRef = doc(db, "workouts", selectedWorkout.id);
@@ -120,160 +133,208 @@ function App() {
     setNewExercise({ name: '', weight: '', sets: '', reps: '' });
   };
 
-  return (
-    <Container>
-      <h1>Workout Diary</h1>
-      <div className="mt-4">
-        <Calendar
-          key={workouts.length}
-          onChange={onDateChange}
-          value={selectedDate}
-          tileContent={tileContent}
-          tileClassName={tileClassName}
-        />
-      </div>
-      <p className="mt-3">Выбрана дата: {selectedDate.toLocaleDateString()}</p>
 
-      {selectedWorkout && (
+
+return (
+  <Container>
+    {!user ? (
+      <div className="mt-4">
+        <h2>Авторизация</h2>
+        <Form>
+          <Form.Group controlId="formEmail">
+            <Form.Label>Email</Form.Label>
+            <Form.Control
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Введите email"
+            />
+          </Form.Group>
+          <Form.Group controlId="formPassword">
+            <Form.Label>Пароль</Form.Label>
+            <Form.Control
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Введите пароль"
+            />
+          </Form.Group>
+          <Button
+            variant="primary"
+            className="mt-2"
+            onClick={() => createUserWithEmailAndPassword(auth, email, password)
+              .catch((error) => alert(error.message))}
+          >
+            Зарегистрироваться
+          </Button>
+          <Button
+            variant="primary"
+            className="mt-2 ms-2"
+            onClick={() => signInWithPopup(auth, new GoogleAuthProvider())
+              .catch((error) => alert(error.message))}
+          >
+            Войти через Google
+          </Button>
+        </Form>
+      </div>
+    ) : (
+      <>
+        <h1>Workout Diary - {user.email}</h1>
+        <Button variant="danger" className="mt-2" onClick={() => signOut(auth)}>Выйти</Button>
         <div className="mt-4">
-          <h3>Упражнения для {selectedDate.toLocaleDateString()}</h3>
-          <ListGroup>
-            {selectedWorkout.exercises.map((exercise, index) => (
-              <ListGroup.Item key={index} className="d-flex justify-content-between align-items-center">
-                {exercise.name}: {exercise.weight} кг, {exercise.sets} x {exercise.reps}
-                <Button
-                  variant="danger"
-                  size="sm"
-                  onClick={() => deleteExercise(index)}
-                  className="ms-2"
-                >
-                  Удалить
-                </Button>
-              </ListGroup.Item>
-            ))}
-          </ListGroup>
+          <Calendar
+            key={workouts.length}
+            onChange={onDateChange}
+            value={selectedDate}
+            tileContent={tileContent}
+            tileClassName={tileClassName}
+          />
         </div>
-      )}
+        <p className="mt-3">Выбрана дата: {selectedDate.toLocaleDateString()}</p>
 
-      <div className="mt-4">
-        <h3>Добавить упражнение</h3>
-        <Form onSubmit={addExercise}>
-          <Row>
-            <Col md={3}>
-              <Form.Group controlId="formType">
-                <Form.Label>Тип тренировки</Form.Label>
-                <Form.Select
-                  value={selectedType}
-                  onChange={(e) => setSelectedType(e.target.value)}
-                  required
-                >
-                  {["верх", "низ", "фулбади", "ягодицы+плечи"].map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
-                </Form.Select>
-              </Form.Group>
-            </Col>
-            <Col md={2}>
-              <Form.Group controlId="formExerciseName">
-                <Form.Label>Упражнение</Form.Label>
+        {selectedWorkout && (
+          <div className="mt-4">
+            <h3>Упражнения для {selectedDate.toLocaleDateString()}</h3>
+            <ListGroup>
+              {selectedWorkout.exercises.map((exercise, index) => (
+                <ListGroup.Item key={index} className="d-flex justify-content-between align-items-center">
+                  {exercise.name}: {exercise.weight} кг, {exercise.sets} x {exercise.reps}
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => deleteExercise(index)}
+                    className="ms-2"
+                  >
+                    Удалить
+                  </Button>
+                </ListGroup.Item>
+              ))}
+            </ListGroup>
+          </div>
+        )}
+
+        <div className="mt-4">
+          <h3>Добавить упражнение</h3>
+          <Form onSubmit={addExercise}>
+            <Row>
+              <Col md={3}>
+                <Form.Group controlId="formType">
+                  <Form.Label>Тип тренировки</Form.Label>
+                  <Form.Select
+                    value={selectedType}
+                    onChange={(e) => setSelectedType(e.target.value)}
+                    required
+                  >
+                    {["верх", "низ", "фулбади", "ягодицы+плечи"].map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+              <Col md={2}>
+                <Form.Group controlId="formExerciseName">
+                  <Form.Label>Упражнение</Form.Label>
+                  <Form.Control
+                    as="select"
+                    value={newExercise.name}
+                    onChange={(e) => setNewExercise({ ...newExercise, name: e.target.value })}
+                    required
+                  >
+                    <option value="">Выберите или введите новое</option>
+                    {exercises.map((exercise, index) => (
+                      <option key={index} value={exercise}>
+                        {exercise}
+                      </option>
+                    ))}
+                  </Form.Control>
+                </Form.Group>
+              </Col>
+              <Col md={2}>
+                <Form.Group controlId="formWeight">
+                  <Form.Label>Вес (кг)</Form.Label>
+                  <Form.Control
+                    type="number"
+                    value={newExercise.weight}
+                    onChange={(e) => setNewExercise({ ...newExercise, weight: e.target.value })}
+                    required
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={2}>
+                <Form.Group controlId="formSets">
+                  <Form.Label>Подходы</Form.Label>
+                  <Form.Control
+                    type="number"
+                    value={newExercise.sets}
+                    onChange={(e) => setNewExercise({ ...newExercise, sets: e.target.value })}
+                    required
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={2}>
+                <Form.Group controlId="formReps">
+                  <Form.Label>Повторения</Form.Label>
+                  <Form.Control
+                    type="number"
+                    value={newExercise.reps}
+                    onChange={(e) => setNewExercise({ ...newExercise, reps: e.target.value })}
+                    required
+                  />
+                </Form.Group>
+              </Col>
+              <Col md={1} className="d-flex align-items-end">
+                <Button variant="primary" type="submit" className="add-button">
+                  Добавить
+                </Button>
+              </Col>
+            </Row>
+          </Form>
+          <Form onSubmit={(e) => {
+            e.preventDefault();
+            const trimmedName = newExercise.name.trim();
+            if (trimmedName && !exercises.includes(trimmedName)) {
+              addDoc(collection(db, "exercises"), { name: trimmedName, createdAt: new Date() });
+              setExercises([...exercises, trimmedName]);
+              setNewExercise(prev => ({ ...prev, name: trimmedName }));
+            } else if (!trimmedName) {
+              alert("Введите название упражнения!");
+            }
+          }}>
+            <Row>
+              <Col md={3}>
                 <Form.Control
-                  as="select"
-                  value={newExercise.name}
+                  type="text"
+                  className="newex-field"
+                  placeholder="Новое упражнение"
+                  value={newExercise.name === "" ? "" : newExercise.name}
                   onChange={(e) => setNewExercise({ ...newExercise, name: e.target.value })}
-                  required
-                >
-                  <option value="">Выберите или введите новое</option>
-                  {exercises.map((exercise, index) => (
-                    <option key={index} value={exercise}>
-                      {exercise}
-                    </option>
-                  ))}
-                </Form.Control>
-              </Form.Group>
-            </Col>
-            <Col md={2}>
-              <Form.Group controlId="formWeight">
-                <Form.Label>Вес (кг)</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={newExercise.weight}
-                  onChange={(e) => setNewExercise({ ...newExercise, weight: e.target.value })}
-                  required
                 />
-              </Form.Group>
-            </Col>
-            <Col md={2}>
-              <Form.Group controlId="formSets">
-                <Form.Label>Подходы</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={newExercise.sets}
-                  onChange={(e) => setNewExercise({ ...newExercise, sets: e.target.value })}
-                  required
-                />
-              </Form.Group>
-            </Col>
-            <Col md={2}>
-              <Form.Group controlId="formReps">
-                <Form.Label>Повторения</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={newExercise.reps}
-                  onChange={(e) => setNewExercise({ ...newExercise, reps: e.target.value })}
-                  required
-                />
-              </Form.Group>
-            </Col>
-            <Col md={1} className="d-flex align-items-end">
-              <Button variant="primary" type="submit" className="add-button">
-                Добавить
-              </Button>
-            </Col>
-          </Row>
-        </Form>
-        <Form onSubmit={(e) => {
-          e.preventDefault();
-          const trimmedName = newExercise.name.trim();
-          if (trimmedName && !exercises.includes(trimmedName)) {
-            addDoc(collection(db, "exercises"), { name: trimmedName, createdAt: new Date() });
-            setExercises([...exercises, trimmedName]);
-            setNewExercise(prev => ({ ...prev, name: trimmedName }));
-          } else if (!trimmedName) {
-            alert("Введите название упражнения!");
-          }
-        }}>
-          <Row>
-            <Col md={3}>
-              <Form.Control
-                type="text"
-                className="newex-field"
-                placeholder="Новое упражнение"
-                value={newExercise.name === "" ? "" : newExercise.name}
-                onChange={(e) => setNewExercise({ ...newExercise, name: e.target.value })}
-              />
-            </Col>
-            <Col md={1}>
-              <Button variant="secondary" type="submit" className="add-new-ex-button">Добавить в базу</Button>
-            </Col>
-          </Row>
-        </Form>
-      </div>
+              </Col>
+              <Col md={1}>
+                <Button variant="secondary" type="submit" className="add-new-ex-button">Добавить в базу</Button>
+              </Col>
+            </Row>
+          </Form>
+        </div>
 
-      <div className="mt-4">
-        <h3>Типы тренировок</h3>
-        <ul className="legend-list">
-          {["верх", "низ", "фулбади"].map((type) => (
-            <li key={type} style={{ color: workoutTypes[type].color }}>
-              <span style={{ backgroundColor: workoutTypes[type].color, width: '15px', height: '15px', borderRadius: '50%', display: 'inline-block', marginRight: '5px' }}></span>
-              {type}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </Container>
-  );
+        <div className="mt-4">
+          <h3>Типы тренировок</h3>
+          <ul className="legend-list">
+            {["верх", "низ", "фулбади"].map((type) => (
+              <li key={type} style={{ color: workoutTypes[type].color }}>
+                <span style={{ backgroundColor: workoutTypes[type].color, width: '15px', height: '15px', borderRadius: '50%', display: 'inline-block', marginRight: '5px' }}></span>
+                {type}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </>
+    )}
+  </Container>
+);
+
 }
 
 export default App;
